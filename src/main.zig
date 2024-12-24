@@ -34,11 +34,16 @@ extern "c" fn CFStringGetBytes(
     usedBufLen: *CFIndex,
 ) callconv(.C) isize;
 
-fn cfString(string: []const u8) CFStringRef {
+inline fn cfString(str: []const u8) CFStringRef {
+    const str_len = str.len;
+    const quo = str_len / 8;
+    const mod = str_len % 8;
+    const aligned_len = 8 * (quo + (if (mod == 0) 0 else 1));
+
     return CFStringCreateWithBytesNoCopy(
         kCFAllocatorDefault,
-        @as([*c]const u8, @ptrCast(string.ptr)),
-        @as(isize, @intCast(string.len)),
+        @as([*c]const u8, @ptrCast((str.ptr))),
+        @as(isize, @intCast(aligned_len)),
         kCFStringEncodingUTF8,
         false,
         kCFAllocatorNull,
@@ -46,15 +51,16 @@ fn cfString(string: []const u8) CFStringRef {
 }
 
 pub fn main() !void {
-    const string = "Hello, world!";
-    const cf_string = cfString(string);
+    const str = "Hello, world!";
+    const cf_string = cfString(str);
     defer std.c.free(cf_string);
 
-    var buffer_w: [string.len:0]u8 = undefined;
+    var buffer_w: [str.len:0]u8 = undefined;
     const range = CFRange{
         .location = 0,
-        .length = @as(CFIndex, @intCast(string.len)),
+        .length = @as(CFIndex, @intCast(str.len)),
     };
+
     var used_buf_len: CFIndex = 0;
     const result = CFStringGetBytes(
         cf_string,
@@ -66,41 +72,17 @@ pub fn main() !void {
         @as(CFIndex, @intCast(buffer_w.len)),
         &used_buf_len,
     );
+    _ = result;
+    std.debug.print("encoded: {s}\n", .{str});
+    std.debug.print("decoded: {s}\n", .{buffer_w});
 
-    std.debug.print("result: {any}\n", .{result});
-
-    std.testing.expectEqualStrings(string, buffer_w[0..]) catch |err| {
+    std.testing.expectEqualStrings(str, buffer_w[0..]) catch |err| {
         std.debug.print("error: {any}\n", .{err});
         return err;
     };
 }
 
 test "test" {
-    const string = "Hello, world!";
-    const cf_string = cfString(string);
-    defer std.c.free(cf_string);
+    // todo add test cases for varying lengths
 
-    var buffer_w: [string.len:0]u8 = undefined;
-    const range = CFRange{
-        .location = 0,
-        .length = @as(CFIndex, @intCast(string.len)),
-    };
-    var used_buf_len: CFIndex = 0;
-    const result = CFStringGetBytes(
-        cf_string,
-        range,
-        kCFStringEncodingUTF8,
-        0,
-        false,
-        &buffer_w,
-        @as(CFIndex, @intCast(buffer_w.len)),
-        &used_buf_len,
-    );
-
-    std.debug.print("result: {any}\n", .{result});
-
-    std.testing.expectEqualStrings(string, buffer_w[0..]) catch |err| {
-        std.debug.print("error: {any}\n", .{err});
-        return err;
-    };
 }
