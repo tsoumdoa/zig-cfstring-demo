@@ -13,17 +13,15 @@ const CFRange = extern struct {
 const kCFStringEncodingUTF8: CFStringEncoding = 0x08000100;
 const kCFAllocatorDefault: CFAllocatorRef = @as(*anyopaque, undefined);
 const kCFAllocatorNull: CFAllocatorRef = @as(*anyopaque, undefined);
+const CFTypeRef = *anyopaque;
 
-extern "c" fn CFStringCreateWithBytesNoCopy(
+pub extern "objc" fn CFStringCreateWithCharacters(
     alloc: CFAllocatorRef,
-    bytes: [*c]const u8,
-    numBytes: CFIndex,
-    encoding: CFStringEncoding,
-    isExternalRepresentation: bool,
-    contentsDeallocator: CFAllocatorRef,
+    chars: *const u16,
+    numChars: CFIndex,
 ) CFStringRef;
 
-extern "objc" fn CFShow(obj: CFStringRef) void;
+extern "c" fn CFShow(obj: CFTypeRef) void;
 extern "c" fn CFStringGetBytes(
     theString: CFStringRef,
     range: CFRange,
@@ -36,32 +34,20 @@ extern "c" fn CFStringGetBytes(
 ) callconv(.C) isize;
 
 inline fn cfString(str: []const u8) CFStringRef {
-    if (str.len <= 10) {
-        const pad = 10 - str.len;
-        const padded = str ++ [_]u8{0} ** @intCast(pad);
-        return CFStringCreateWithBytesNoCopy(
-            kCFAllocatorDefault,
-            @as([*c]const u8, @ptrCast((padded.ptr))),
-            @as(isize, @intCast(padded.len)),
-            kCFStringEncodingUTF8,
-            false,
-            kCFAllocatorNull,
-        );
-    } else {
-        return CFStringCreateWithBytesNoCopy(
-            kCFAllocatorDefault,
-            @as([*c]const u8, @ptrCast((str.ptr))),
-            @as(isize, @intCast(str.len)),
-            kCFStringEncodingUTF8,
-            false,
-            kCFAllocatorNull,
-        );
-    }
+    const unicode = std.unicode.utf8ToUtf16LeStringLiteral(str);
+    return CFStringCreateWithCharacters(
+        kCFAllocatorDefault,
+        @as([*c]const u16, @ptrCast(unicode.ptr)),
+        @as(isize, @intCast(unicode.len)),
+    );
 }
 
 pub fn main() !void {
-    const str = "CPU ";
+    const sub = "CPU Stats";
+    const str = "CPU Core Performance States";
+    const sub_cf_string = cfString(sub);
     const cf_string = cfString(str);
+    CFShow(sub_cf_string);
     CFShow(cf_string);
     defer std.c.free(cf_string);
 
@@ -95,5 +81,4 @@ pub fn main() !void {
 test "test" {
     // todo add test cases for varying lengths
     // it still fails with a memory error...
-
 }
