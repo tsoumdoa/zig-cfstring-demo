@@ -23,6 +23,7 @@ extern "c" fn CFStringCreateWithBytesNoCopy(
     contentsDeallocator: CFAllocatorRef,
 ) CFStringRef;
 
+extern "objc" fn CFShow(obj: CFStringRef) void;
 extern "c" fn CFStringGetBytes(
     theString: CFStringRef,
     range: CFRange,
@@ -35,24 +36,33 @@ extern "c" fn CFStringGetBytes(
 ) callconv(.C) isize;
 
 inline fn cfString(str: []const u8) CFStringRef {
-    const str_len = str.len;
-    const quo = str_len / 8;
-    const mod = str_len % 8;
-    const aligned_len = 8 * (quo + (if (mod == 0) 0 else 1));
-
-    return CFStringCreateWithBytesNoCopy(
-        kCFAllocatorDefault,
-        @as([*c]const u8, @ptrCast((str.ptr))),
-        @as(isize, @intCast(aligned_len)),
-        kCFStringEncodingUTF8,
-        false,
-        kCFAllocatorNull,
-    );
+    if (str.len <= 10) {
+        const pad = 10 - str.len;
+        const padded = str ++ [_]u8{0} ** @intCast(pad);
+        return CFStringCreateWithBytesNoCopy(
+            kCFAllocatorDefault,
+            @as([*c]const u8, @ptrCast((padded.ptr))),
+            @as(isize, @intCast(padded.len)),
+            kCFStringEncodingUTF8,
+            false,
+            kCFAllocatorNull,
+        );
+    } else {
+        return CFStringCreateWithBytesNoCopy(
+            kCFAllocatorDefault,
+            @as([*c]const u8, @ptrCast((str.ptr))),
+            @as(isize, @intCast(str.len)),
+            kCFStringEncodingUTF8,
+            false,
+            kCFAllocatorNull,
+        );
+    }
 }
 
 pub fn main() !void {
-    const str = "Hello, world!";
+    const str = "CPU ";
     const cf_string = cfString(str);
+    CFShow(cf_string);
     defer std.c.free(cf_string);
 
     var buffer_w: [str.len:0]u8 = undefined;
@@ -84,5 +94,6 @@ pub fn main() !void {
 
 test "test" {
     // todo add test cases for varying lengths
+    // it still fails with a memory error...
 
 }
